@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+
+# Environment / secrets
+.env
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+*.egg-info/
+
+# Build output (frontend)
+dist/
+
+# Generated at runtime (backend)
+backend/static/
+backend/uploads/
+uploads/
+detection_results.json
+
+# Large media & model weights (tải riêng / không commit)
+*.mp4
+*.avi
+*.mov
+*.pt
+*.keras
+*.h5
+
+# Ngoại lệ: commit model cần cho demo + đánh giá (nhỏ, để repo chạy được ngay).
+# Riêng yolov8s-pose.pt (~23MB) KHÔNG commit — Ultralytics tự tải khi chạy lần đầu.
+!backend/models/v1.4_best.keras
+!research/code/models/v1.4_best.keras
+!research/code/models/hao_baseline_lstm_cnn_56feat.h5
+!research/code/models/v2.0_best.pt
+!research/code/models/v2.4_best.pt
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/

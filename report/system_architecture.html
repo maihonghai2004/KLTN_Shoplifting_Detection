@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kiến trúc hệ thống – Phát hiện hành vi bất thường siêu thị</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #0d1117;
+    color: #e6edf3;
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    padding: 32px 24px 60px;
+  }
+
+  h1 {
+    text-align: center;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #58a6ff;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+  }
+  .subtitle {
+    text-align: center;
+    font-size: 0.82rem;
+    color: #8b949e;
+    margin-bottom: 36px;
+    font-style: italic;
+  }
+
+  /* ─── GRID LAYOUT ─── */
+  .arch-wrapper {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  /* ─── INPUT ROW ─── */
+  .input-row {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 0;
+  }
+
+  .node-input {
+    background: linear-gradient(135deg, #161b22, #1c2128);
+    border: 1.5px solid #30363d;
+    border-radius: 14px;
+    padding: 16px 28px;
+    text-align: center;
+    position: relative;
+    min-width: 260px;
+  }
+  .node-input .icon { font-size: 2rem; display: block; margin-bottom: 6px; }
+  .node-input .label { font-weight: 600; font-size: 0.95rem; color: #79c0ff; }
+  .node-input .desc { font-size: 0.75rem; color: #8b949e; margin-top: 3px; }
+
+  /* ─── ARROW ─── */
+  .arrow-down {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 40px;
+    position: relative;
+  }
+  .arrow-down::before {
+    content: '';
+    width: 2px;
+    height: 100%;
+    background: linear-gradient(to bottom, #388bfd, #58a6ff);
+    display: block;
+  }
+  .arrow-down::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    border-left: 7px solid transparent;
+    border-right: 7px solid transparent;
+    border-top: 10px solid #58a6ff;
+  }
+
+  /* ─── PIPELINE STAGES ─── */
+  .pipeline {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .stage {
+    display: grid;
+    grid-template-columns: 220px 1fr 200px;
+    gap: 16px;
+    align-items: center;
+    margin-bottom: 0;
+  }
+
+  .stage-badge {
+    text-align: right;
+    padding-right: 12px;
+  }
+  .stage-badge .num {
+    display: inline-block;
+    background: linear-gradient(135deg, #1f6feb, #388bfd);
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.7rem;
+    padding: 3px 10px;
+    border-radius: 20px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .stage-badge .stage-name {
+    font-size: 0.78rem;
+    color: #8b949e;
+    line-height: 1.4;
+  }
+
+  .stage-box {
+    border-radius: 14px;
+    padding: 18px 22px;
+    border: 1.5px solid;
+    position: relative;
+    overflow: hidden;
+  }
+  .stage-box::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    border-radius: 14px 14px 0 0;
+  }
+
+  /* Stage colors */
+  .s1 { border-color: #f78166; background: linear-gradient(135deg, #1a1006, #1e1410); }
+  .s1::before { background: linear-gradient(90deg, #f78166, #ffa657); }
+  .s2 { border-color: #3fb950; background: linear-gradient(135deg, #091612, #0e1f0e); }
+  .s2::before { background: linear-gradient(90deg, #3fb950, #56d364); }
+  .s3 { border-color: #d2a8ff; background: linear-gradient(135deg, #130d1a, #1a1024); }
+  .s3::before { background: linear-gradient(90deg, #d2a8ff, #bc8cff); }
+  .s4 { border-color: #58a6ff; background: linear-gradient(135deg, #0a1628, #0d1f38); }
+  .s4::before { background: linear-gradient(90deg, #58a6ff, #79c0ff); }
+
+  .stage-box .model-name {
+    font-weight: 700;
+    font-size: 1rem;
+    margin-bottom: 4px;
+  }
+  .s1 .model-name { color: #ffa657; }
+  .s2 .model-name { color: #56d364; }
+  .s3 .model-name { color: #d2a8ff; }
+  .s4 .model-name { color: #79c0ff; }
+
+  .stage-box .model-sub {
+    font-size: 0.72rem;
+    color: #8b949e;
+    margin-bottom: 10px;
+  }
+
+  .tag-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .tag {
+    font-size: 0.65rem;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-weight: 500;
+  }
+  .s1 .tag { background: rgba(247,129,102,0.15); color: #ffa657; border: 1px solid rgba(247,129,102,0.3); }
+  .s2 .tag { background: rgba(63,185,80,0.12); color: #56d364; border: 1px solid rgba(63,185,80,0.3); }
+  .s3 .tag { background: rgba(210,168,255,0.12); color: #d2a8ff; border: 1px solid rgba(210,168,255,0.3); }
+  .s4 .tag { background: rgba(88,166,255,0.12); color: #79c0ff; border: 1px solid rgba(88,166,255,0.3); }
+
+  .latency {
+    font-size: 0.68rem;
+    font-family: 'JetBrains Mono', monospace;
+    margin-top: 10px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    display: inline-block;
+  }
+  .s1 .latency { background: rgba(247,129,102,0.1); color: #f78166; }
+  .s2 .latency { background: rgba(63,185,80,0.1); color: #3fb950; }
+  .s3 .latency { background: rgba(210,168,255,0.1); color: #bc8cff; }
+  .s4 .latency { background: rgba(88,166,255,0.1); color: #58a6ff; }
+
+  .output-col {
+    padding-left: 8px;
+  }
+  .output-box {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 0.72rem;
+    color: #8b949e;
+    line-height: 1.6;
+  }
+  .output-box strong {
+    display: block;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #6e7681;
+    margin-bottom: 5px;
+  }
+  .output-item {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    color: #c9d1d9;
+    padding: 1px 0;
+  }
+
+  /* ─── STAGE 4 INNER DETAIL ─── */
+  .s4-inner {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    margin-top: 12px;
+  }
+  .s4-sub {
+    background: rgba(88,166,255,0.07);
+    border: 1px solid rgba(88,166,255,0.2);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 0.7rem;
+  }
+  .s4-sub .sub-title {
+    font-weight: 700;
+    font-size: 0.72rem;
+    color: #79c0ff;
+    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .s4-sub .sub-title .badge {
+    background: rgba(88,166,255,0.2);
+    color: #58a6ff;
+    font-size: 0.58rem;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-weight: 600;
+  }
+  .s4-sub li {
+    color: #8b949e;
+    font-size: 0.65rem;
+    line-height: 1.6;
+    list-style: none;
+    padding-left: 8px;
+    position: relative;
+  }
+  .s4-sub li::before {
+    content: '▸';
+    position: absolute;
+    left: 0;
+    color: #388bfd;
+    font-size: 0.55rem;
+    top: 2px;
+  }
+
+  .ensemble-formula {
+    margin-top: 12px;
+    background: rgba(88,166,255,0.06);
+    border: 1px dashed rgba(88,166,255,0.25);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    color: #79c0ff;
+    text-align: center;
+  }
+  .ensemble-formula span { color: #ffa657; }
+
+  /* ─── ARROW WITH LABEL ─── */
+  .arrow-labeled {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 44px;
+    position: relative;
+    justify-content: center;
+  }
+  .arrow-labeled .line {
+    width: 2px;
+    flex: 1;
+    background: linear-gradient(to bottom, #388bfd55, #388bfd);
+  }
+  .arrow-labeled .lbl {
+    font-size: 0.62rem;
+    color: #6e7681;
+    font-family: 'JetBrains Mono', monospace;
+    background: #0d1117;
+    padding: 0 6px;
+    white-space: nowrap;
+    position: absolute;
+  }
+  .arrow-labeled .tip {
+    width: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 9px solid #388bfd;
+  }
+
+  /* ─── OUTPUT / ALERT ROW ─── */
+  .output-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-top: 40px;
+  }
+
+  .out-card {
+    border-radius: 12px;
+    padding: 18px 20px;
+    border: 1.5px solid;
+    text-align: center;
+  }
+  .out-card .out-icon { font-size: 1.8rem; display: block; margin-bottom: 8px; }
+  .out-card .out-title { font-weight: 700; font-size: 0.85rem; margin-bottom: 5px; }
+  .out-card .out-desc { font-size: 0.7rem; color: #8b949e; line-height: 1.5; }
+
+  .oc-alert { border-color: #f85149; background: linear-gradient(135deg, #1a0808, #200d0d); }
+  .oc-alert .out-title { color: #ff7b72; }
+  .oc-db { border-color: #3fb950; background: linear-gradient(135deg, #071a08, #0c1f0d); }
+  .oc-db .out-title { color: #56d364; }
+  .oc-dash { border-color: #d2a8ff; background: linear-gradient(135deg, #130d1a, #1c1227); }
+  .oc-dash .out-title { color: #d2a8ff; }
+
+  /* ─── KPI ROW ─── */
+  .kpi-section {
+    margin-top: 40px;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 14px;
+    padding: 20px 24px;
+  }
+  .kpi-section h2 {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #6e7681;
+    margin-bottom: 14px;
+  }
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+  .kpi-item {
+    background: #0d1117;
+    border-radius: 10px;
+    padding: 12px 14px;
+    border: 1px solid #21262d;
+  }
+  .kpi-item .kpi-label {
+    font-size: 0.65rem;
+    color: #6e7681;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+  .kpi-item .kpi-val {
+    font-size: 1rem;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    color: #e6edf3;
+  }
+  .kpi-item .kpi-sub {
+    font-size: 0.62rem;
+    color: #8b949e;
+    margin-top: 3px;
+  }
+  .kpi-item .bar {
+    height: 4px;
+    border-radius: 2px;
+    margin-top: 8px;
+    background: #21262d;
+    overflow: hidden;
+  }
+  .kpi-item .bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 1s ease;
+  }
+
+  /* ─── TECH STACK ─── */
+  .tech-row {
+    margin-top: 24px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+  }
+  .tech-chip {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 20px;
+    padding: 5px 14px;
+    font-size: 0.7rem;
+    color: #8b949e;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .tc-hot { border-color: #f78166; color: #ffa657; background: rgba(247,129,102,0.08); }
+  .tc-green { border-color: #3fb950; color: #56d364; background: rgba(63,185,80,0.08); }
+  .tc-blue { border-color: #58a6ff; color: #79c0ff; background: rgba(88,166,255,0.08); }
+  .tc-purple { border-color: #d2a8ff; color: #d2a8ff; background: rgba(210,168,255,0.08); }
+
+  footer {
+    text-align: center;
+    margin-top: 40px;
+    font-size: 0.7rem;
+    color: #484f58;
+  }
+
+  /* ─── RESPONSIVE CONNECTOR ─── */
+  .connector-row {
+    display: grid;
+    grid-template-columns: 220px 1fr 200px;
+    gap: 16px;
+    height: 44px;
+    align-items: center;
+  }
+  .connector-row .side-note {
+    text-align: right;
+    padding-right: 12px;
+    font-size: 0.62rem;
+    color: #484f58;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .connector-row .center-arrow {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    position: relative;
+  }
+  .center-arrow .vert {
+    width: 2px;
+    height: 100%;
+    background: linear-gradient(to bottom, #388bfd66, #388bfd);
+  }
+  .center-arrow .arrowhead {
+    position: absolute;
+    bottom: -1px;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 9px solid #388bfd;
+  }
+  .connector-row .side-label {
+    padding-left: 8px;
+    font-size: 0.62rem;
+    color: #484f58;
+    font-family: 'JetBrains Mono', monospace;
+  }
+</style>
+</head>
+<body>
+
+<h1>🏪 Hệ thống Phát hiện Hành vi Bất thường trong Siêu thị</h1>
+<p class="subtitle">Luận văn tốt nghiệp – Ứng dụng Deep Learning | Kiến trúc 4 giai đoạn Pipeline</p>
+
+<div class="arch-wrapper">
+
+  <!-- INPUT -->
+  <div class="input-row">
+    <div class="node-input">
+      <span class="icon">📹</span>
+      <div class="label">CCTV Video Stream</div>
+      <div class="desc">Camera IP cố định · Góc cao 45–60° · Khu vực kệ hàng</div>
+      <div style="margin-top:8px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+        <span class="tag" style="background:rgba(88,166,255,0.1);color:#79c0ff;border:1px solid rgba(88,166,255,0.25);font-size:0.63rem;padding:2px 8px;border-radius:6px;font-family:'JetBrains Mono',monospace;">12 FPS</span>
+        <span class="tag" style="background:rgba(88,166,255,0.1);color:#79c0ff;border:1px solid rgba(88,166,255,0.25);font-size:0.63rem;padding:2px 8px;border-radius:6px;font-family:'JetBrains Mono',monospace;">640×480px</span>
+        <span class="tag" style="background:rgba(88,166,255,0.1);color:#79c0ff;border:1px solid rgba(88,166,255,0.25);font-size:0.63rem;padding:2px 8px;border-radius:6px;font-family:'JetBrains Mono',monospace;">RGB 2D</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Connector -->
+  <div class="connector-row">
+    <div class="side-note">video frames</div>
+    <div class="center-arrow"><div class="vert"></div><div class="arrowhead"></div></div>
+    <div class="side-label"></div>
+  </div>
+
+  <!-- STAGE 1 -->
+  <div class="stage">
+    <div class="stage-badge">
+      <div class="num">Stage 1</div>
+      <div class="stage-name">Object<br>Detection</div>
+    </div>
+    <div class="stage-box s1">
+      <div class="model-name">YOLOv8n / YOLOv11n</div>
+      <div class="model-sub">Fine-tuned · Focal Loss (α=0.25, γ=2.0) · Input 640×480</div>
+      <div class="tag-row">
+        <span class="tag">person</span>
+        <span class="tag">product</span>
+        <span class="tag">bag_backpack</span>
+        <span class="tag">pocket</span>
+        <span class="tag">mAP@50 ≥ 0.85</span>
+        <span class="tag">mAP@50-95 ≥ 0.65</span>
+      </div>
+      <div class="latency">⚡ &lt; 15ms/frame</div>
+    </div>
+    <div class="output-col">
+      <div class="output-box">
+        <strong>Output</strong>
+        <div class="output-item">BBox [x,y,w,h]</div>
+        <div class="output-item">class_id, conf</div>
+        <div class="output-item">4 classes / frame</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Connector 1→2 -->
+  <div class="connector-row">
+    <div class="side-note">bounding boxes</div>
+    <div class="center-arrow"><div class="vert"></div><div class="arrowhead"></div></div>
+    <div class="side-label"></div>
+  </div>
+
+  <!-- STAGE 2 -->
+  <div class="stage">
+    <div class="stage-badge">
+      <div class="num">Stage 2</div>
+      <div class="stage-name">Multi-Object<br>Tracking</div>
+    </div>
+    <div class="stage-box s2">
+      <div class="model-name">ByteTrack <span style="font-size:0.7rem;color:#8b949e;font-weight:400">+ DeepSORT (baseline)</span></div>
+      <div class="model-sub">Persistent ID assignment · Re-identification · Occlusion handling</div>
+      <div class="tag-row">
+        <span class="tag">MOTA ≥ 0.70</span>
+        <span class="tag">IDF1 ≥ 0.75</span>
+        <span class="tag">IoU-based matching</span>
+        <span class="tag">Kalman Filter</span>
+      </div>
+      <div class="latency">⚡ &lt; 5ms/frame</div>
+    </div>
+    <div class="output-col">
+      <div class="output-box">
+        <strong>Output</strong>
+        <div class="output-item">track_id (persistent)</div>
+        <div class="output-item">trajectory history</div>
+        <div class="output-item">BBox per track</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Connector 2→3 -->
+  <div class="connector-row">
+    <div class="side-note">tracked persons</div>
+    <div class="center-arrow"><div class="vert"></div><div class="arrowhead"></div></div>
+    <div class="side-label"></div>
+  </div>
+
+  <!-- STAGE 3 -->
+  <div class="stage">
+    <div class="stage-badge">
+      <div class="num">Stage 3</div>
+      <div class="stage-name">Pose<br>Estimation</div>
+    </div>
+    <div class="stage-box s3">
+      <div class="model-name">YOLO-Pose</div>
+      <div class="model-sub">17 COCO Keypoints · Zero-centered by hip joint · Per-person crop</div>
+      <div class="tag-row">
+        <span class="tag">Tensor (T, 17, 3)</span>
+        <span class="tag">x, y, confidence</span>
+        <span class="tag">Hip normalization</span>
+        <span class="tag">Temporal window T</span>
+      </div>
+      <div class="latency">⚡ &lt; 10ms/frame</div>
+    </div>
+    <div class="output-col">
+      <div class="output-box">
+        <strong>Output</strong>
+        <div class="output-item">17 joints (x,y,c)</div>
+        <div class="output-item">Skeleton graph</div>
+        <div class="output-item">Wrist trajectory</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Connector 3→4 -->
+  <div class="connector-row">
+    <div class="side-note">skeleton sequences</div>
+    <div class="center-arrow"><div class="vert"></div><div class="arrowhead"></div></div>
+    <div class="side-label">+ features</div>
+  </div>
+
+  <!-- STAGE 4 -->
+  <div class="stage" style="align-items: start;">
+    <div class="stage-badge" style="padding-top:18px;">
+      <div class="num">Stage 4</div>
+      <div class="stage-name">Behavior<br>Analysis</div>
+    </div>
+    <div class="stage-box s4">
+      <div class="model-name">Ensemble: Rule-based + ST-GCN + LSTM</div>
+      <div class="model-sub">Primary contribution: ST-GCN · F1-Score (macro) ≥ 0.80</div>
+
+      <div class="s4-inner">
+        <!-- Rule-based -->
+        <div class="s4-sub">
+          <div class="sub-title">🔧 Rule-based FSM <span class="badge">γ</span></div>
+          <ul>
+            <li>4 states: BROWSING→PICKING→CONCEALING→EXITING</li>
+            <li>IoU collision detection</li>
+            <li>Wrist ↔ bag/product overlap</li>
+            <li>Dwell time threshold</li>
+          </ul>
+        </div>
+
+        <!-- ST-GCN -->
+        <div class="s4-sub" style="border-color:rgba(88,166,255,0.4);background:rgba(88,166,255,0.1);">
+          <div class="sub-title">🌟 ST-GCN <span class="badge" style="background:rgba(255,166,87,0.2);color:#ffa657;">PRIMARY</span></div>
+          <ul>
+            <li>Graph: 17 COCO joints</li>
+            <li>3 blocks: 64→128→256 ch</li>
+            <li>Input: (B, T, 17, 3)</li>
+            <li>Spatial + Temporal edges</li>
+            <li>Adjacency matrix learnable</li>
+          </ul>
+        </div>
+
+        <!-- LSTM -->
+        <div class="s4-sub">
+          <div class="sub-title">🔄 LSTM Aux <span class="badge">β</span></div>
+          <ul>
+            <li>5 features/timestep</li>
+            <li>dist_wrist_bag</li>
+            <li>velocity_wrist (x,y)</li>
+            <li>product_visibility</li>
+            <li>hidden=128, layers=2</li>
+            <li>Dropout(0.3)</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="ensemble-formula">
+        final_score = <span>α</span> × ST-GCN_score + <span>β</span> × LSTM_score + <span>γ</span> × rule_score
+        <br><span style="color:#8b949e;font-size:0.65rem;">α, β, γ  ←  Grid Search on Validation Set</span>
+      </div>
+    </div>
+    <div class="output-col" style="padding-top:18px;">
+      <div class="output-box">
+        <strong>Output</strong>
+        <div class="output-item">suspicion_score</div>
+        <div class="output-item">[0.0 → 1.0]</div>
+        <div class="output-item">alert: bool</div>
+        <div class="output-item">state: enum</div>
+        <div class="output-item" style="margin-top:6px;color:#58a6ff;">⚡ &lt;30ms/window</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Connector → Outputs -->
+  <div class="connector-row">
+    <div class="side-note"></div>
+    <div class="center-arrow"><div class="vert"></div><div class="arrowhead"></div></div>
+    <div class="side-label"></div>
+  </div>
+
+  <!-- OUTPUT CARDS -->
+  <div class="output-row">
+    <div class="out-card oc-alert">
+      <span class="out-icon">🚨</span>
+      <div class="out-title">Real-time Alert</div>
+      <div class="out-desc">Cảnh báo tức thời khi score ≥ threshold<br>Lưu evidence clip tự động<br>Timestamp + Track ID + Bounding Box</div>
+    </div>
+    <div class="out-card oc-db">
+      <span class="out-icon">🗄️</span>
+      <div class="out-title">PostgreSQL Database</div>
+      <div class="out-desc">Lưu trữ events, tracks, scores<br>SQLAlchemy ORM<br>Truy vấn lịch sử & thống kê</div>
+    </div>
+    <div class="out-card oc-dash">
+      <span class="out-icon">📊</span>
+      <div class="out-title">Streamlit Dashboard</div>
+      <div class="out-desc">Live feed + overlay skeleton<br>Score timeline chart<br>Evidence clip player · Log table</div>
+    </div>
+  </div>
+
+  <!-- KPI SECTION -->
+  <div class="kpi-section">
+    <h2>🎯 KPI Targets (End-to-End)</h2>
+    <div class="kpi-grid">
+      <div class="kpi-item">
+        <div class="kpi-label">Detection mAP@50</div>
+        <div class="kpi-val">≥ 0.85</div>
+        <div class="kpi-sub">Excellent: ≥ 0.92</div>
+        <div class="bar"><div class="bar-fill" style="width:85%;background:linear-gradient(90deg,#f78166,#ffa657);"></div></div>
+      </div>
+      <div class="kpi-item">
+        <div class="kpi-label">Tracking MOTA</div>
+        <div class="kpi-val">≥ 0.70</div>
+        <div class="kpi-sub">Excellent: ≥ 0.80</div>
+        <div class="bar"><div class="bar-fill" style="width:70%;background:linear-gradient(90deg,#3fb950,#56d364);"></div></div>
+      </div>
+      <div class="kpi-item">
+        <div class="kpi-label">Action F1 (macro)</div>
+        <div class="kpi-val">≥ 0.80</div>
+        <div class="kpi-sub">Excellent: ≥ 0.88</div>
+        <div class="bar"><div class="bar-fill" style="width:80%;background:linear-gradient(90deg,#d2a8ff,#bc8cff);"></div></div>
+      </div>
+      <div class="kpi-item">
+        <div class="kpi-label">End-to-End FPS</div>
+        <div class="kpi-val">≥ 15</div>
+        <div class="kpi-sub">Excellent: ≥ 25 FPS</div>
+        <div class="bar"><div class="bar-fill" style="width:60%;background:linear-gradient(90deg,#58a6ff,#79c0ff);"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TECH STACK -->
+  <div class="tech-row">
+    <span class="tech-chip tc-hot">PyTorch ≥2.0</span>
+    <span class="tech-chip tc-hot">CUDA 11.8</span>
+    <span class="tech-chip tc-hot">Ultralytics YOLOv8</span>
+    <span class="tech-chip tc-green">ByteTrack</span>
+    <span class="tech-chip tc-green">DeepSORT</span>
+    <span class="tech-chip tc-purple">torch_geometric</span>
+    <span class="tech-chip tc-purple">ST-GCN</span>
+    <span class="tech-chip tc-blue">Streamlit ≥1.30</span>
+    <span class="tech-chip tc-blue">PostgreSQL 14</span>
+    <span class="tech-chip tc-blue">ONNX Runtime</span>
+    <span class="tech-chip">NumPy · Pandas · Scikit-learn</span>
+    <span class="tech-chip">TensorBoard / WandB</span>
+    <span class="tech-chip">CVAT / Roboflow</span>
+  </div>
+
+</div>
+
+<footer>
+  KLTN – Deep Learning Application for Detecting Abnormal Behavior in Supermarkets · Author: mhhai · 2025–2026
+</footer>
+
+</body>
+</html>

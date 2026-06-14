@@ -1,0 +1,60 @@
+# =====================================================================
+# Cấu hình tổng cho hệ thống KLTN
+# =====================================================================
+
+paths:
+  models: "models/checkpoints"
+  yolo_pose: "models/checkpoints/yolov8s-pose.pt"
+  hao_baseline: "models/checkpoints/hao_baseline_lstm_cnn_56feat.h5"
+  v14: "models/checkpoints/v1.4_best.keras"
+  v20: "models/checkpoints/v2.0_best.pt"
+  data_npy: "data/processed_npy"
+  clean_csv_56: "data/clean_csv_56feat"
+  raw_keypoints: "data/raw_keypoints"
+  sample_videos: "data/sample_videos"
+  outputs: "outputs"
+
+data:
+  seq_length: 90        # số frame mỗi cửa sổ (~7.5s @ 12 FPS)
+  step: 30              # bước sliding window
+  num_features: 56      # 34 relative_kp + 20 bone + 2 hand-hip dist
+  num_joints: 17        # COCO-17
+  num_classes: 2        # 0 = Normal, 1 = Shoplifting
+
+split:
+  strategy: "stratified_group_kfold"   # chống data leakage
+  n_folds: 5
+  seeds: [42, 123, 7, 2024, 999]
+
+train:
+  optimizer: "adamw"
+  lr: 1.0e-3
+  weight_decay: 5.0e-4
+  scheduler: "cosine_warm_restart"
+  epochs: 120
+  batch_size: 32
+  patience: 35
+  focal_alpha: 0.25
+  focal_gamma: 2.0
+
+inference:
+  conf_threshold: 0.5       # YOLO confidence
+  alert_threshold: 0.5      # suspicion score → alert
+  smooth_window: 5          # số frame smooth score
+  ensemble_alpha: 0.5       # trọng số V1.4 trong ensemble V2.3
+  device: "cpu"             # "cuda" nếu có GPU
+  max_persons: 20           # số người tracking đồng thời tối đa
+  stale_threshold: 30       # frames trước khi xóa track mất tích
+
+# KPI mục tiêu (theo đề cương)
+kpi:
+  f1_macro_min: 0.80
+  f1_macro_excellent: 0.88
+  precision_min: 0.78
+  recall_min: 0.80
+  fps_min: 15
+
+# Kết quả tốt nhất hiện tại (multi-seed, split-by-clip)
+results:
+  v2_3_ensemble_f1: 0.8067
+  v2_3_ensemble_std: 0.0153
