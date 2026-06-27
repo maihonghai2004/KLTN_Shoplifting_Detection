@@ -528,8 +528,11 @@ async def analyze_model(file: UploadFile = File(...), model: str = Form("v1.4"))
         }
     finally:
         for p_file in (tmp_upload, tmp_rendered):
-            if p_file.exists():
-                p_file.unlink()
+            try:
+                if p_file.exists():
+                    p_file.unlink()
+            except OSError:
+                pass  # Windows đôi khi còn khóa file tạm — bỏ qua, OS sẽ dọn sau.
 
 
 @app.get("/")

@@ -6,6 +6,7 @@ torch==2.2.2
 torchvision==0.17.2
 tensorflow==2.15.0
 ultralytics==8.2.103
+lapx>=0.5                 # cung cấp module 'lap' cho ByteTrack (yolo.track multi-person)
 pandas==2.2.2
 h5py>=3.10
 imageio-ffmpeg>=0.5
